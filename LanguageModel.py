@@ -40,12 +40,12 @@ class LanguageModel(object):
                 return tf.contrib.rnn.BasicLSTMCell(hidden_size, forget_bias=0.0, state_is_tuple=True)
         cell = lstm_cell()
         self.initial_state = cell.zero_state(batch_size, data_type())
-    
-        embedding = tf.get_variable("embedding", 
-                                    initializer=tf.random_uniform_initializer(-config.init_scale, config.init_scale),
-                                    shape=[vocab_size, hidden_size], 
-                                    dtype=data_type())
-        inputs = tf.nn.embedding_lookup(embedding, input_.input_data) # [None, unrolled_size, embedding_size]
+        with tf.device("/cpu:0"):
+            embedding = tf.get_variable("embedding", 
+                                        initializer=tf.random_uniform_initializer(-config.init_scale, config.init_scale),
+                                        shape=[vocab_size, hidden_size], 
+                                        dtype=data_type())
+            inputs = tf.nn.embedding_lookup(embedding, input_.input_data) # [None, unrolled_size, embedding_size]
         # Implemented RNN cell, unrolled to feedforward
         outputs = []
         state = self.initial_state
@@ -84,7 +84,7 @@ class LanguageModel(object):
                 [logits],
                 [tf.reshape(input_.targets, [-1])],
                  [tf.ones([batch_size * unrolled_steps], dtype=data_type())])
-        self.perp_all = tf.reduce_sum(seq_loss) / batch_size
+        self.perp_raw = tf.reduce_sum(seq_loss) / batch_size
                                      
         self.final_state = state
         # TODO: maybe sampling?
