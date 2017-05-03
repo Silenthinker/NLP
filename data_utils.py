@@ -2,7 +2,7 @@ import numpy as np
 import os
 from collections import Counter
 import pickle
-import tensorflow as tf
+#import tensorflow as tf
 
 """
 All the data is already white-space tokenized and lower-cased. one sentence per line.
@@ -14,11 +14,19 @@ TODO provide the ground truth last word as input to the RNN, not the last word y
 """
 
 class Reader():
-    def __init__(self, max_vocabSize=20000, max_sentence_length=30):
-        self.word_toId = []
-        self.id_toWord = []
+    def __init__(self, data_file_path, max_vocabSize=20000, max_sentence_length=30):
         self.max_vocabSize = max_vocabSize
         self.max_sentence_length = max_sentence_length
+        self.data_file_path = data_file_path
+        vocab_file = os.path.join(self.data_file_path, "vocab.pkl")
+        wordIds_file = os.path.join(self.data_file_path, "wordIds.pkl")
+        idWords_file = os.path.join(self.data_file_path, "idWords.pkl")
+        if not (os.path.exists(vocab_file) and os.path.exists(wordIds_file) and os.path.exists(idWords_file)):
+            print("Preprocessing...")
+            self.raw_data()
+        else:
+            print("Loading preprocessed data...")
+            self.load_preprocessed()
         
     def _read_sentences(self, data_file_path):
         """
@@ -36,7 +44,6 @@ class Reader():
         """
         Prune vocabulary to max_vocabSize
         """
-        cwd = os.getcwd()
         spec_word_size = len(spec_word)
         words_toKeep = [tupl[0] for tupl in word_counts.most_common(self.max_vocabSize-spec_word_size)]
         # Create mapping from words/PoS tags to ids
@@ -44,18 +51,20 @@ class Reader():
         for i, word in enumerate(spec_word):
             self.word_toId[word] = i
         self.id_toWord = {i: word for word, i in self.word_toId.items()}
-        if not os.path.exists(cwd+"/vocab"):
-            os.makedirs(cwd+"/vocab")
-        with open(cwd+"/vocab/vocab.pkl", "wb") as f:
+        if not os.path.exists(self.data_file_path):
+            os.makedirs(self.data_file_path)
+        with open(os.path.join(self.data_file_path, "vocab.pkl"), "wb") as f:
             pickle.dump(words_toKeep, f)
-        with open(cwd+"/vocab/wordIds.pkl", "wb") as f:
+        with open(os.path.join(self.data_file_path, "wordIds.pkl"), "wb") as f:
             pickle.dump(self.word_toId, f)
-        with open(cwd+"/vocab/idWords.pkl", "wb") as f:
+        with open(os.path.join(self.data_file_path, "idWords.pkl"), "wb") as f:
             pickle.dump(self.id_toWord, f)
     
     def word_to_id(self, sentences, padding=True, ending=True):
         """
         Map words to id in file
+        Return:
+            list of ids
         """
         x = [] # list of word ids
         for sentence in sentences:
@@ -84,20 +93,20 @@ class Reader():
         sentences = []
         num_sentences = x.shape[0]
         for i in range(num_sentences):
-            sentence = [self.id_toWord[id] for id in x[i, :] if self.id_toWord[id] not in ["<bos>", "<pad>"]]
+            sentence = [self.id_toWord[id] for id in x[i, :]]
             sentences.append(" ".join(sentence))
         return sentences
         
-    def raw_data(self, data_path, spec_word=("<bos>", "<eos>", "<pad>", "<unk>")):
+    def raw_data(self, spec_word=("<bos>", "<eos>", "<pad>", "<unk>")):
         """
         Loads training and evaluation data, creates vocabulary (including <bos>, <eos>, <pad>, <unk>) 
         and returns the respective ids for words
-        Args:
-            data_file_path: directory that contains data files
+        Return:
+            tuple of list of word ids
         """
         # Load data from file
-        train_path = os.path.join(data_path, "sentences.train")
-        eval_path = os.path.join(data_path, "sentences.eval")
+        train_path = os.path.join(self.data_file_path, "sentences.train")
+        eval_path = os.path.join(self.data_file_path, "sentences.eval")
         word_counts = Counter() # Collect word counts
         train_sentences = self._read_sentences(train_path)
         eval_sentences = self._read_sentences(eval_path)
@@ -113,10 +122,23 @@ class Reader():
         self._build_vocab(word_counts, spec_word)
         
         # Replace each word with id
-        train_data = self.word_to_id(train_sentences)
-        eval_data = self.word_to_id(eval_sentences)
-        return train_data, eval_data
-
+        self.train_data = self.word_to_id(train_sentences)
+        self.eval_data = self.word_to_id(eval_sentences)
+        with open(os.path.join(self.data_file_path, "train_data.pkl"), "wb") as f:
+            pickle.dump(self.train_data, f)
+        with open(os.path.join(self.data_file_path, "eval_data.pkl"), "wb") as f:
+            pickle.dump(self.eval_data, f)    
+    
+    def load_preprocessed(self):
+        with open(os.path.join(self.data_file_path, "wordIds.pkl"), "rb") as f:
+            self.word_toId = pickle.load(f)
+        with open(os.path.join(self.data_file_path, "idWords.pkl"), "rb") as f:
+            self.id_toWord = pickle.load(f)
+        with open(os.path.join(self.data_file_path, "train_data.pkl"), "rb") as f:
+            self.train_data = pickle.load(f)
+        with open(os.path.join(self.data_file_path, "eval_data.pkl"), "rb") as f:
+            self.eval_data = pickle.load(f)
+    '''
     def batch_producer(self, raw_data, batch_size, name=None):
         """
         Generates a batch iterator for a dataset and feed directly to graph
@@ -136,9 +158,41 @@ class Reader():
             x.set_shape([batch_size, unrolled_steps])
             y.set_shape([batch_size, unrolled_steps])
         return x, y
-
+    '''
+    
+    def batch_iter(self, raw_data, batch_size=64, shuffle=True):
+        """
+        Generates a batch iterator for a dataset.
+        Args:
+            data: list of tuples which is ([unrolled_steps,], [unrolled_steps,])
+        Return:
+            Tuple of arrays, each shaped [batch_size, unrolled_steps]. The second element
+            of the tuple is the same data time-shifted to the right by one.
+    
+        """
+        data = np.array(raw_data) 
+        data = np.reshape(data, [-1, self.max_sentence_length])
+        self.num_batches_per_epoch = num_batches_per_epoch = int(data.shape[0]/batch_size)
+        data = data[0:num_batches_per_epoch*batch_size, :]
+        num_sentences = data.shape[0]
+        # Shuffle the data at each epoch
+        if shuffle:
+            shuffle_indices = np.random.permutation(np.arange(num_sentences))
+            shuffled_data = data[shuffle_indices, :]
+        else:
+            shuffled_data = data
+        for batch_num in range(num_batches_per_epoch):
+            start_index = batch_num * batch_size
+            end_index = (batch_num + 1) * batch_size
+            x, y = shuffled_data[start_index:end_index, 0:self.max_sentence_length-1], shuffled_data[start_index:end_index, 1:self.max_sentence_length]
+            yield x, y
+                
 if __name__ == "__main__":
     data_file_path = os.path.join(os.path.dirname(__file__), "data")
-    reader = Reader()
-#    train_data, eval_data = reader.raw_data(data_file_path)
-    x, y = reader.batch_producer(eval_data, 64)
+    reader = Reader(data_file_path, max_sentence_length=30)
+    batches = reader.batch_iter(reader.train_data, 64)
+    i = 0
+    for batch in batches:
+        x, y = batch
+        if i == 0:
+            break
