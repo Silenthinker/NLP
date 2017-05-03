@@ -23,6 +23,8 @@ def main():
     # training
     parser.add_argument('--batch_size', type=int, default=64, help='minibatch size')
     parser.add_argument('--num_epochs', type=int, default=3, help='number of epochs')
+    parser.add_argument('--inter_threads', type=int, default=4, help='inter_op_parallelism_threads')
+    parser.add_argument('--intra_threads', type=int, default=4, help='intra_op_parallelism_threads')
     # save and restore
     parser.add_argument('--data_dir', type=str, default='data/', help='data directory containing training, evaluation, and continuation data')
     parser.add_argument('--save_dir', type=str, default='save', help='directory to store checkpointed models')
@@ -50,8 +52,8 @@ def train(args):
         pickle.dump(args, f)
     
     model = Model(args)
-    session_conf = tf.ConfigProto(inter_op_parallelism_threads = 4,
-                                  intra_op_parallelism_threads = 4,
+    session_conf = tf.ConfigProto(inter_op_parallelism_threads = args.inter_threads,
+                                  intra_op_parallelism_threads = args.intra_threads,
                                   allow_soft_placement=True,
                                   log_device_placement=True)
     sess = tf.Session(config=session_conf)
