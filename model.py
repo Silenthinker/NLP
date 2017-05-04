@@ -81,7 +81,7 @@ class Model():
             softmax_b = tf.get_variable("softmax_b", [args.vocab_size])
         self.logits = tf.matmul(output, softmax_w) + softmax_b
         self.predictions = tf.reshape(tf.argmax(self.logits, 1, name="predictions"), [-1, args.unrolled_steps])
-        self.probs = tf.nn.softmax(self.logits)
+        self.probs = tf.nn.softmax(self.logits) # same shape as logits
         loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.reshape(self.targets, [-1]),
                                                               logits=self.logits)
         # TODO: compute sentence-level perplexity without considering <pad>
@@ -109,23 +109,25 @@ class Model():
     
     def sample(self, sess, id_toWord, word_toId, num=20, beg=['i']):
         state = sess.run(self.cell.zero_state(1, tf.float32))
-        for char in beg[:-1]:
+        # first feed given words
+        for w in beg[:-1]:
             x = np.zeros((1, 1))
-            x[0, 0] = word_toId[char]
+            x[0, 0] = word_toId[w]
             feed = {self.input_data: x, self.initial_state: state}
             [state] = sess.run([self.final_state], feed)
         res = beg
-        char = beg[-1]
+        w = beg[-1]
+        # from last word, iteratively generate next word
         for n in range(num-1):
-            x = np.zeros((1, 1))
-            x[0, 0] = word_toId[char]
+            x = np.zeros((1, 1)) # same rank required
+            x[0, 0] = word_toId[w]
             feed = {self.input_data: x, self.initial_state: state}
             [probs, state] = sess.run([self.probs, self.final_state], feed)
-            p = probs[0]
-            sample = np.argmax(p)
+            # probs: [1, vocab_size]
+            sample = np.argmax(probs) # return scalar
             pred = id_toWord[sample]
             res.append(pred)
-            char = pred
-            if char == '<eos>':
+            w = pred
+            if w == '<eos>':
                 break
         return " ".join(res)

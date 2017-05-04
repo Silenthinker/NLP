@@ -26,15 +26,15 @@ def main():
     parser.add_argument('-n', type=int, default=20, help='max generated sentence length')
     parser.add_argument('--data_dir', type=str, default='data/', help='data directory containing training, evaluation, and continuation data')
     args = parser.parse_args()
-    
-    sampler = Sampler(args)
-    with tf.Session() as sess:
-        tf.global_variables_initializer().run()
-        saver = tf.train.Saver(tf.global_variables())
-        ckpt = tf.train.get_checkpoint_state(args.save_dir)
-        if ckpt and ckpt.model_checkpoint_path:
-            saver.restore(sess, ckpt.model_checkpoint_path)
-            print(sampler.sample(sess))
+    with tf.Graph().as_default():
+        sampler = Sampler(args)
+        with tf.Session() as sess:
+            tf.global_variables_initializer().run()
+            saver = tf.train.Saver(tf.global_variables())
+            ckpt = tf.train.get_checkpoint_state(args.save_dir)
+            if ckpt and ckpt.model_checkpoint_path:
+                saver.restore(sess, ckpt.model_checkpoint_path)
+                print(sampler.sample(sess, beg='people'.split(' ')))
 
 if __name__ == '__main__':
     main()

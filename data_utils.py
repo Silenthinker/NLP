@@ -68,7 +68,21 @@ class Reader():
         """
         x = [] # list of word ids
         for sentence in sentences:
+            # add <bos>
             x.append(self.word_toId["<bos>"])
+            for i in range(self.max_sentence_length-1): # only need to fill self.max_sentence_length words
+                if i < len(sentence):
+                    if sentence[i] in self.word_toId:
+                        x.append(self.word_toId[sentence[i]])
+                    else:
+                        x.append(self.word_toId["<unk>"])
+                elif i == len(sentence):
+                    if ending:
+                        x. append(self.word_toId["<eos>"])
+                else:
+                    if padding:
+                        x.append(self.word_toId["<pad>"])
+            """
             for i in range(self.max_sentence_length-2):
                 if i < len(sentence):
                     if sentence[i] in self.word_toId:
@@ -80,6 +94,7 @@ class Reader():
                         x.append(self.word_toId["<pad>"])
             if ending:
                 x.append(self.word_toId["<eos>"])
+            """
         return x
     
     def id_to_word(self, x):

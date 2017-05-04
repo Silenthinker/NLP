@@ -16,7 +16,7 @@ def main():
     parser.add_argument('--vocab_size', type=int, default=20000, help='size of vocabulary')
     parser.add_argument('--hidden_size', type=int, default=512, help='size of RNN hidden state')
     parser.add_argument('--embedding_size', type=int, default=100, help='size of embedding')
-    parser.add_argument('--unrolled_steps', type=int, default=29, help='RNN sequence length')
+    parser.add_argument('--unrolled_steps', type=int, default=29, help='RNN unrolled length')
     parser.add_argument('--grad_clip', type=float, default=10., help='clip gradients at this value')
     parser.add_argument('--learning_rate', type=float, default=0.002, help='learning rate')
     parser.add_argument('--decay_rate', type=float, default=0.97, help='decay rate for rmsprop')
@@ -45,6 +45,7 @@ def main():
 
 def train(args):
     args.max_sentence_length = args.unrolled_steps+1
+    sample_file = "sample_"+time.strftime("%Y-%m-%d-%H-%M-%S")+".txt"
     reader = Reader(args.data_dir, max_vocabSize=args.vocab_size, max_sentence_length=args.max_sentence_length)
     if not os.path.isdir(args.save_dir):
         os.makedirs(args.save_dir)
@@ -100,7 +101,7 @@ def train(args):
                                global_step=epoch_idx * reader.num_batches_per_epoch + b)
                     print("model saved to {}".format(checkpoint_path))
                     print("Average perplexity = {:.3f}".format(train_loss_sum/(args.unrolled_steps*(b+1))))
-                    with open(os.path.join(args.save_dir, "sample.txt"), "a") as f: # Write samples to file            
+                    with open(os.path.join(args.save_dir, sample_file), "a") as f: # Write samples to file            
                         f.write("Epoch: {}, batch: {}/{}".format(epoch_idx, 
                                 epoch_idx * reader.num_batches_per_epoch + b,
                                 args.num_epochs * reader.num_batches_per_epoch))
