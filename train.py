@@ -1,4 +1,3 @@
-from __future__ import print_function
 import tensorflow as tf
 import argparse
 import time
@@ -19,7 +18,8 @@ def main():
     parser.add_argument('--unrolled_steps', type=int, default=29, help='RNN unrolled length')
     parser.add_argument('--grad_clip', type=float, default=10., help='clip gradients at this value')
     parser.add_argument('--learning_rate', type=float, default=0.002, help='learning rate')
-    parser.add_argument('--decay_rate', type=float, default=0.97, help='decay rate for rmsprop')
+    parser.add_argument('--decay_rate', type=float, default=0.97, help='decay rate for learning rate')
+    parser.add_argument('--init_scale', type=float, default=0.1, help='initial scale for random uniform initializer')
     # training
     parser.add_argument('--batch_size', type=int, default=64, help='minibatch size')
     parser.add_argument('--num_epochs', type=int, default=3, help='number of epochs')
@@ -29,16 +29,7 @@ def main():
     parser.add_argument('--data_dir', type=str, default='data/', help='data directory containing training, evaluation, and continuation data')
     parser.add_argument('--save_dir', type=str, default='save', help='directory to store checkpointed models')
     parser.add_argument('--log_dir', type=str, default='logs', help='directory to store tensorboard logs')
-    parser.add_argument('--save_every', type=int, default=500,
-                        help='save frequency')
-    parser.add_argument('--init_from', type=str, default=None,
-                        help="""continue training from saved model at this path. Path must contain files saved by previous training process:
-                            'config.pkl'        : configuration;
-                            'chars_vocab.pkl'   : vocabulary definitions;
-                            'checkpoint'        : paths to model file(s) (created by tf).
-                                                  Note: this file contains absolute paths, be careful when moving files around;
-                            'model.ckpt-*'      : file(s) with model definition (created by tf)
-                        """)
+    parser.add_argument('--save_every', type=int, default=200, help='save frequency')
     args = parser.parse_args()
     train(args)
 
@@ -51,8 +42,11 @@ def train(args):
         os.makedirs(args.save_dir)
     with open(os.path.join(args.save_dir, 'config.pkl'), 'wb') as f:
         pickle.dump(args, f)
-    
-    model = Model(args)
+    with tf.variable_scope("model", reuse=None):
+        model = Model(args, training=True)
+            # for tensorboard
+    tf.summary.histogram('logits', model.logits)
+    tf.summary.scalar('train_loss', model.cost)
     session_conf = tf.ConfigProto(inter_op_parallelism_threads = args.inter_threads,
                                   intra_op_parallelism_threads = args.intra_threads,
                                   allow_soft_placement=True,

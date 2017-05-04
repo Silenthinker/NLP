@@ -64,7 +64,9 @@ class Model():
         self.initial_state = cell.zero_state(args.batch_size, tf.float32)
         
         # embedding layer
-        embedding = tf.get_variable("embedding", [args.vocab_size, args.embedding_size])
+        embedding = tf.get_variable("embedding", 
+                                    initializer=tf.random_uniform_initializer(-args.init_scale, args.init_scale), 
+                                    shape=[args.vocab_size, args.embedding_size])
         inputs = tf.nn.embedding_lookup(embedding, self.input_data) # [batch_size, unrolled_steps, embedding_size]
         inputs = tf.split(inputs, args.unrolled_steps, 1) # list of length unrolled_steps, each element: [batch_size, 1, embedding_size]
         inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
@@ -79,9 +81,10 @@ class Model():
                                         initializer=tf.contrib.layers.xavier_initializer(),
                                         shape=[args.hidden_size, args.vocab_size])
             softmax_b = tf.get_variable("softmax_b", [args.vocab_size])
-        self.logits = tf.matmul(output, softmax_w) + softmax_b
+        self.logits = tf.matmul(output, softmax_w) + softmax_b # [batch_size*unrolled_steps, vocab_size]
         self.predictions = tf.reshape(tf.argmax(self.logits, 1, name="predictions"), [-1, args.unrolled_steps])
-        self.probs = tf.nn.softmax(self.logits) # same shape as logits
+        probs_distr = tf.nn.softmax(self.logits) # same shape as logits
+        self.probs = tf.argmax(probs_distr, axis=1, name="compute_word_prob")
         loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.reshape(self.targets, [-1]),
                                                               logits=self.logits)
         # TODO: compute sentence-level perplexity without considering <pad>
@@ -89,9 +92,12 @@ class Model():
 #                                                       [tf.reshape(self.targets, [-1])],
 #                                                        [tf.ones([args.batch_size * args.unrolled_steps])])
         with tf.name_scope('cost'):
-            self.cost = tf.reduce_sum(loss) / args.batch_size # sentence level
+            self.cost = tf.reduce_sum(loss) / args.batch_size # sentence level cross entropy
                                      
         self.final_state = last_state
+        
+        if not training:
+            return
         
         # gradient
         self.lr = tf.Variable(0.0, trainable=False)
@@ -101,18 +107,17 @@ class Model():
         with tf.name_scope('optimizer'):
             optimizer = tf.train.AdamOptimizer(self.lr)
         self.train_op = optimizer.apply_gradients(zip(grads, tvars))
-
-        # for tensorboard
-        tf.summary.histogram('logits', self.logits)
-        tf.summary.histogram('loss', loss)
-        tf.summary.scalar('train_loss', self.cost)
     
     def sample(self, sess, id_toWord, word_toId, num=20, beg=['i']):
+        def word_to_id(w):
+            return word_toId[w] if w in word_toId else word_toId['<unk>']
+        
         state = sess.run(self.cell.zero_state(1, tf.float32))
+        beg.insert(0, '<eos>') # add <eos>
         # first feed given words
         for w in beg[:-1]:
             x = np.zeros((1, 1))
-            x[0, 0] = word_toId[w]
+            x[0, 0] = word_to_id(w) #word_toId[w]
             feed = {self.input_data: x, self.initial_state: state}
             [state] = sess.run([self.final_state], feed)
         res = beg
@@ -120,7 +125,7 @@ class Model():
         # from last word, iteratively generate next word
         for n in range(num-1):
             x = np.zeros((1, 1)) # same rank required
-            x[0, 0] = word_toId[w]
+            x[0, 0] = word_to_id(w) # word_toId[w]
             feed = {self.input_data: x, self.initial_state: state}
             [probs, state] = sess.run([self.probs, self.final_state], feed)
             # probs: [1, vocab_size]

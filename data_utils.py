@@ -64,24 +64,26 @@ class Reader():
         """
         Map words to id in file
         Return:
-            list of ids
+            list of lists of id
         """
         x = [] # list of word ids
         for sentence in sentences:
+            words = []
             # add <bos>
-            x.append(self.word_toId["<bos>"])
+            words.append(self.word_toId["<bos>"])
             for i in range(self.max_sentence_length-1): # only need to fill self.max_sentence_length words
                 if i < len(sentence):
                     if sentence[i] in self.word_toId:
-                        x.append(self.word_toId[sentence[i]])
+                        words.append(self.word_toId[sentence[i]])
                     else:
-                        x.append(self.word_toId["<unk>"])
+                        words.append(self.word_toId["<unk>"])
                 elif i == len(sentence):
                     if ending:
-                        x. append(self.word_toId["<eos>"])
+                        words. append(self.word_toId["<eos>"])
                 else:
                     if padding:
-                        x.append(self.word_toId["<pad>"])
+                        words.append(self.word_toId["<pad>"])
+            x.append(words)
             """
             for i in range(self.max_sentence_length-2):
                 if i < len(sentence):
@@ -122,9 +124,11 @@ class Reader():
         # Load data from file
         train_path = os.path.join(self.data_file_path, "sentences.train")
         eval_path = os.path.join(self.data_file_path, "sentences.eval")
+        cont_path = os.path.join(self.data_file_path, "sentences.continuation")
         word_counts = Counter() # Collect word counts
         train_sentences = self._read_sentences(train_path)
         eval_sentences = self._read_sentences(eval_path)
+        self.cont_data = self._read_sentences(cont_path)
         for sentence in train_sentences:
             # TODO: maybe consider voc for all sentences instead of just training set?
             for word in sentence:
@@ -143,6 +147,8 @@ class Reader():
             pickle.dump(self.train_data, f)
         with open(os.path.join(self.data_file_path, "eval_data.pkl"), "wb") as f:
             pickle.dump(self.eval_data, f)    
+        with open(os.path.join(self.data_file_path, "cont_data.pkl"), "wb") as f:
+            pickle.dump(self.cont_data, f)    
     
     def load_preprocessed(self):
         with open(os.path.join(self.data_file_path, "wordIds.pkl"), "rb") as f:
@@ -153,40 +159,21 @@ class Reader():
             self.train_data = pickle.load(f)
         with open(os.path.join(self.data_file_path, "eval_data.pkl"), "rb") as f:
             self.eval_data = pickle.load(f)
-    '''
-    def batch_producer(self, raw_data, batch_size, name=None):
-        """
-        Generates a batch iterator for a dataset and feed directly to graph
-        """
-        unrolled_steps = self.max_sentence_length - 1
-        with tf.name_scope(name, "BatchProducer", [raw_data, batch_size, unrolled_steps]):
-            raw_data = tf.convert_to_tensor(raw_data, name="raw_data", dtype=tf.int32)
-    
-            data_len = tf.size(raw_data)
-            batch_len = data_len // batch_size
-            data = tf.reshape(raw_data[0 : batch_size * batch_len], [batch_size, batch_len])
-            epoch_size = (batch_len - 1) // unrolled_steps
-        
-            i = tf.train.range_input_producer(epoch_size, shuffle=False).dequeue() # capacity of queue epoch_size
-            x = tf.strided_slice(data, [0, i * unrolled_steps], [batch_size, (i + 1) * unrolled_steps]) # like generator
-            y = tf.strided_slice(data, [0, i * unrolled_steps + 1], [batch_size, (i + 1) * unrolled_steps + 1])
-            x.set_shape([batch_size, unrolled_steps])
-            y.set_shape([batch_size, unrolled_steps])
-        return x, y
-    '''
+        with open(os.path.join(self.data_file_path, "cont_data.pkl"), "rb") as f:
+            self.cont_data = pickle.load(f)
     
     def batch_iter(self, raw_data, batch_size=64, shuffle=True):
         """
         Generates a batch iterator for a dataset.
         Args:
-            data: list of tuples which is ([unrolled_steps,], [unrolled_steps,])
+            raw_data: list of lists of ids
         Return:
             Tuple of arrays, each shaped [batch_size, unrolled_steps]. The second element
             of the tuple is the same data time-shifted to the right by one.
     
         """
         data = np.array(raw_data) 
-        data = np.reshape(data, [-1, self.max_sentence_length])
+#        data = np.reshape(data, [-1, self.max_sentence_length])
         self.num_batches_per_epoch = num_batches_per_epoch = int(data.shape[0]/batch_size)
         data = data[0:num_batches_per_epoch*batch_size, :]
         num_sentences = data.shape[0]
