@@ -17,7 +17,7 @@ def main():
     parser.add_argument('--embedding_size', type=int, default=100, help='size of embedding')
     parser.add_argument('--unrolled_steps', type=int, default=29, help='RNN unrolled length')
     parser.add_argument('--grad_clip', type=float, default=10., help='clip gradients at this value')
-    parser.add_argument('--learning_rate', type=float, default=0.002, help='learning rate')
+    parser.add_argument('--learning_rate', type=float, default=0.01, help='learning rate')
     parser.add_argument('--decay_rate', type=float, default=0.97, help='decay rate for learning rate')
     parser.add_argument('--init_scale', type=float, default=0.1, help='initial scale for random uniform initializer')
     # training
@@ -42,8 +42,7 @@ def train(args):
         os.makedirs(args.save_dir)
     with open(os.path.join(args.save_dir, 'config.pkl'), 'wb') as f:
         pickle.dump(args, f)
-    with tf.variable_scope("model", reuse=None):
-        model = Model(args, training=True)
+    model = Model(args, training=True)
             # for tensorboard
     tf.summary.histogram('logits', model.logits)
     tf.summary.scalar('train_loss', model.cost)
@@ -80,11 +79,11 @@ def train(args):
                 train_loss_sum += train_loss
                 writer.add_summary(summ, epoch_idx * reader.num_batches_per_epoch + b)
                 end = time.time()
-                print("{}/{} (epoch {}), perplexity = {:.3f}, time/batch = {:.3f}"
+                print("{}/{} (epoch {}), average perplexity = {:.3f}, time/batch = {:.3f}"
                       .format(epoch_idx * reader.num_batches_per_epoch + b,
                               args.num_epochs * reader.num_batches_per_epoch,
                               epoch_idx,
-                              train_loss,
+                              train_loss_sum/(b+1),
                               end - start))
                 if ((epoch_idx * reader.num_batches_per_epoch+ b) % args.save_every == 0 
                     or (epoch_idx == args.num_epochs-1 
@@ -94,7 +93,7 @@ def train(args):
                     saver.save(sess, checkpoint_path,
                                global_step=epoch_idx * reader.num_batches_per_epoch + b)
                     print("model saved to {}".format(checkpoint_path))
-                    print("Average perplexity = {:.3f}".format(train_loss_sum/(args.unrolled_steps*(b+1))))
+#                    print("Average perplexity = {:.3f}".format(train_loss_sum/(b+1)))
                     with open(os.path.join(args.save_dir, sample_file), "a") as f: # Write samples to file            
                         f.write("Epoch: {}, batch: {}/{}".format(epoch_idx, 
                                 epoch_idx * reader.num_batches_per_epoch + b,
