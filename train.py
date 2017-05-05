@@ -8,17 +8,19 @@ from gensim import models
 from data_utils import Reader
 from model import Model
 
-def configure(args, experiment="A"):
+def configure(args):
     args.hidden_size = 512
     args.projector_size = args.hidden_size
-    if experiment == "A":
+    config = args.config
+    if config == "A":
         args.pretrain = False
-    elif experiment == "B":
+    elif config == "B":
         args.pretrain = True
     else:
         args.hidden_size = 1024
         args.pretrain = True
         args.projector_size = 512
+    return args
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -28,9 +30,10 @@ def main():
     parser.add_argument('--embedding_size', type=int, default=100, help='size of embedding')
     parser.add_argument('--unrolled_steps', type=int, default=29, help='RNN unrolled length')
     parser.add_argument('--grad_clip', type=float, default=10., help='clip gradients at this value')
-    parser.add_argument('--learning_rate', type=float, default=0.02, help='learning rate')
+    parser.add_argument('--learning_rate', type=float, default=0.001, help='learning rate')
     parser.add_argument('--decay_rate', type=float, default=0.97, help='decay rate for learning rate')
     parser.add_argument('--init_scale', type=float, default=0.1, help='initial scale for random uniform initializer')
+    parser.add_argument('--config', type=str, default='C', help='choose configuration of model')
     # training
     parser.add_argument('--pretrain', type=bool, default=False, help='pretrain word embedding')
     parser.add_argument('--batch_size', type=int, default=64, help='minibatch size')
@@ -44,6 +47,7 @@ def main():
     parser.add_argument('--save_every', type=int, default=200, help='save frequency')
     args = parser.parse_args()
     tf.set_random_seed(15) # allow reproduce results
+    configure(args)
     train(args)
 
 def load_embedding(session, data_dir, vocab_size, embedding_size, word_toId, emb):
@@ -124,7 +128,7 @@ def train(args):
                 train_loss_sum += train_loss
                 writer.add_summary(summ, epoch_idx * reader.num_batches_per_epoch + b)
                 end = time.time()
-                print("{}/{} (epoch {}), average perplexity = {:.3f}, time/batch = {:.3f}"
+                print("{}/{} (epoch {}), average loss = {:.3f}, time/batch = {:.3f}"
                       .format(epoch_idx * reader.num_batches_per_epoch + b,
                               args.num_epochs * reader.num_batches_per_epoch,
                               epoch_idx,
@@ -138,7 +142,6 @@ def train(args):
                     saver.save(sess, checkpoint_path,
                                global_step=epoch_idx * reader.num_batches_per_epoch + b)
                     print("model saved to {}".format(checkpoint_path))
-#                    print("Average perplexity = {:.3f}".format(train_loss_sum/(b+1)))
                     with open(os.path.join(args.save_dir, sample_file), "a") as f: # Write samples to file            
                         f.write("Epoch: {}, batch: {}/{}".format(epoch_idx, 
                                 epoch_idx * reader.num_batches_per_epoch + b,
