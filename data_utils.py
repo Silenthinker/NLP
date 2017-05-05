@@ -18,17 +18,20 @@ class Reader():
         self.max_vocabSize = max_vocabSize
         self.max_sentence_length = max_sentence_length
         self.data_file_path = data_file_path
-        vocab_file = os.path.join(self.data_file_path, "vocab.pkl")
-        wordIds_file = os.path.join(self.data_file_path, "wordIds.pkl")
-        idWords_file = os.path.join(self.data_file_path, "idWords.pkl")
-        if not (os.path.exists(vocab_file) and os.path.exists(wordIds_file) and os.path.exists(idWords_file)):
+        check_file = ["vocab.pkl", "wordIds.pkl", "idWords.pkl", "train_data.pkl", "eval_data.pkl", "cont_data.pkl"]
+        need_preprocessing = False
+        for file_name in check_file:
+            if not os.path.exists(os.path.join(self.data_file_path, file_name)):
+                need_preprocessing = True
+                break
+        if need_preprocessing:
             print("Preprocessing...")
             self.raw_data()
         else:
             print("Loading preprocessed data...")
             self.load_preprocessed()
         
-    def _read_sentences(self, data_file_path):
+    def _read_sentences(self, data_file_path, trim=True):
         """
         Returns:
             list of sentences
@@ -37,7 +40,10 @@ class Reader():
             # TODO: maybe strip special char such as '' or `?
             splitted_sentences = [sentence.strip().split(" ") for sentence in sentences]
             # max_sentence_length includes <bos> and <eos>
-            splitted_sentences = [sentence for sentence in splitted_sentences if len(sentence) <= (self.max_sentence_length-2)]
+            if trim:
+                splitted_sentences = [sentence for sentence in splitted_sentences if len(sentence) <= (self.max_sentence_length-2)]
+            else:
+                splitted_sentences = [sentence for sentence in splitted_sentences]
         return splitted_sentences
     
     def _build_vocab(self, word_counts, spec_word):
@@ -127,7 +133,7 @@ class Reader():
         cont_path = os.path.join(self.data_file_path, "sentences.continuation")
         word_counts = Counter() # Collect word counts
         train_sentences = self._read_sentences(train_path)
-        eval_sentences = self._read_sentences(eval_path)
+        eval_sentences = self._read_sentences(eval_path, trim=False)
         self.cont_data = self._read_sentences(cont_path)
         for sentence in train_sentences:
             # TODO: maybe consider voc for all sentences instead of just training set?

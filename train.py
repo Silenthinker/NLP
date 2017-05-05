@@ -11,6 +11,7 @@ from model import Model
 def configure(args):
     args.hidden_size = 512
     args.projector_size = args.hidden_size
+    args.learning_rate = 0.05
     config = args.config
     if config == "A":
         args.pretrain = False
@@ -20,6 +21,7 @@ def configure(args):
         args.hidden_size = 1024
         args.pretrain = True
         args.projector_size = 512
+        args.learning_rate = 0.005
     return args
 
 def main():
