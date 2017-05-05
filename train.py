@@ -11,7 +11,7 @@ from model import Model
 def configure(args):
     args.hidden_size = 512
     args.projector_size = args.hidden_size
-    args.learning_rate = 0.05
+    args.learning_rate = 0.01
     config = args.config
     if config == "A":
         args.pretrain = False
@@ -21,7 +21,7 @@ def configure(args):
         args.hidden_size = 1024
         args.pretrain = True
         args.projector_size = 512
-        args.learning_rate = 0.005
+        args.learning_rate = 0.001
     return args
 
 def main():
@@ -37,7 +37,7 @@ def main():
     parser.add_argument('--init_scale', type=float, default=0.1, help='initial scale for random uniform initializer')
     parser.add_argument('--config', type=str, default='C', help='choose configuration of model')
     # training
-    parser.add_argument('--pretrain', type=bool, default=False, help='pretrain word embedding')
+    parser.add_argument('--pretrain', type=bool, default=True, help='pretrain word embedding')
     parser.add_argument('--batch_size', type=int, default=64, help='minibatch size')
     parser.add_argument('--num_epochs', type=int, default=3, help='number of epochs')
     parser.add_argument('--inter_threads', type=int, default=4, help='inter_op_parallelism_threads')
@@ -60,6 +60,7 @@ def load_embedding(session, data_dir, vocab_size, embedding_size, word_toId, emb
         word_toId: A dictionary mapping token strings to vocabulary IDs
         emb: Embedding tensor of shape vocabulary_size x dim_embedding      
     '''
+    # TODO: better learning rate management
     path = os.path.join(data_dir, "wordembeddings-dim100.word2vec")
     print("Loading external embeddings from %s" % path)
     model = models.KeyedVectors.load_word2vec_format(path, binary=False)
