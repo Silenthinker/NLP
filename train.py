@@ -8,7 +8,17 @@ from gensim import models
 from data_utils import Reader
 from model import Model
 
-
+def configure(args, experiment="A"):
+    args.hidden_size = 512
+    args.projector_size = args.hidden_size
+    if experiment == "A":
+        args.pretrain = False
+    elif experiment == "B":
+        args.pretrain = True
+    else:
+        args.hidden_size = 1024
+        args.pretrain = True
+        args.projector_size = 512
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)

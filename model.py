@@ -83,13 +83,24 @@ class Model():
         outputs, last_state = rnn(inputs, self.initial_state, cell, scope='softmax')
         output = tf.reshape(tf.concat(outputs, 1), [-1, args.hidden_size]) # [batch_size*unrolled_steps, hidden_size]
         
+        # down-project
+        if args.hidden_size == 1024:
+            with tf.variable_scope("projector"):
+                projector_w = tf.get_variable("projector_w",
+                                        initializer=tf.contrib.layers.xavier_initializer(),
+                                        shape=[args.hidden_size, args.projector_size])
+                projector_b = tf.get_variable("projector_b", [args.projector_size])
+            down_proj_output = tf.matmul(output, projector_w) + projector_b
+        else:
+            down_proj_output = output
+        
         # softmax
         with tf.variable_scope('softmax'):
             softmax_w = tf.get_variable("softmax_w",
                                         initializer=tf.contrib.layers.xavier_initializer(),
-                                        shape=[args.hidden_size, args.vocab_size])
+                                        shape=[args.projector_size, args.vocab_size])
             softmax_b = tf.get_variable("softmax_b", [args.vocab_size])
-        self.logits = tf.matmul(output, softmax_w) + softmax_b # [batch_size*unrolled_steps, vocab_size]
+        self.logits = tf.matmul(down_proj_output, softmax_w) + softmax_b # [batch_size*unrolled_steps, vocab_size]
         self.predictions = tf.reshape(tf.argmax(self.logits, 1, name="predictions"), [-1, args.unrolled_steps])
         self.probs = tf.nn.softmax(self.logits)
         loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.reshape(self.targets, [-1]),
