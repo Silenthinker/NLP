@@ -18,7 +18,7 @@ class Reader():
         self.max_vocabSize = max_vocabSize
         self.max_sentence_length = max_sentence_length
         self.data_file_path = data_file_path
-        check_file = ["vocab.pkl", "wordIds.pkl", "idWords.pkl", "train_data.pkl", "eval_data.pkl", "cont_data.pkl"]
+        check_file = ["vocab.pkl", "wordIds.pkl", "idWords.pkl", "train_data.pkl", "eval_data.pkl", "test_data.pkl", "cont_data.pkl"]
         need_preprocessing = False
         for file_name in check_file:
             if not os.path.exists(os.path.join(self.data_file_path, file_name)):
@@ -130,11 +130,16 @@ class Reader():
         # Load data from file
         train_path = os.path.join(self.data_file_path, "sentences.train")
         eval_path = os.path.join(self.data_file_path, "sentences.eval")
+        test_path = os.path.join(self.data_file_path, "sentences_test")
         cont_path = os.path.join(self.data_file_path, "sentences.continuation")
+        
         word_counts = Counter() # Collect word counts
+        # read sentences
         train_sentences = self._read_sentences(train_path)
         eval_sentences = self._read_sentences(eval_path, trim=False)
+        test_sentences = self._read_sentences(test_path, trim=False)
         self.cont_data = self._read_sentences(cont_path)
+        
         for sentence in train_sentences:
             # TODO: maybe consider voc for all sentences instead of just training set?
             for word in sentence:
@@ -149,10 +154,13 @@ class Reader():
         # Replace each word with id
         self.train_data = self.word_to_id(train_sentences)
         self.eval_data = self.word_to_id(eval_sentences)
+        self.test_data = self.word_to_id(test_sentences)        
         with open(os.path.join(self.data_file_path, "train_data.pkl"), "wb") as f:
             pickle.dump(self.train_data, f)
         with open(os.path.join(self.data_file_path, "eval_data.pkl"), "wb") as f:
             pickle.dump(self.eval_data, f)    
+        with open(os.path.join(self.data_file_path, "test_data.pkl"), "wb") as f:
+            pickle.dump(self.test_data, f)    
         with open(os.path.join(self.data_file_path, "cont_data.pkl"), "wb") as f:
             pickle.dump(self.cont_data, f)    
     
@@ -165,6 +173,8 @@ class Reader():
             self.train_data = pickle.load(f)
         with open(os.path.join(self.data_file_path, "eval_data.pkl"), "rb") as f:
             self.eval_data = pickle.load(f)
+        with open(os.path.join(self.data_file_path, "test_data.pkl"), "rb") as f:
+            self.test_data = pickle.load(f)
         with open(os.path.join(self.data_file_path, "cont_data.pkl"), "rb") as f:
             self.cont_data = pickle.load(f)
     

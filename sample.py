@@ -23,7 +23,7 @@ class Sampler():
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-n', type=int, default=20, help='max generated sentence length')
-    parser.add_argument('-beg', type=str, default="to", help='beginning of a sentence')
+    parser.add_argument('-beg', type=str, default="i am", help='(str) beginning of a sentence; if none, generate sentences for sentences.continuation')
     parser.add_argument('--save_dir', type=str, default='save', help='model directory to store checkpointed models')
     parser.add_argument('--data_dir', type=str, default='data/', help='data directory containing training, evaluation, and continuation data')
     parser.add_argument('--res_dir', type=str, default='res', help='data directory containing results')
@@ -47,7 +47,8 @@ def main():
                     print(sampler.sample(sess, beg=args.beg.split(' ')))
                 else:
                     for idx, sentence in enumerate(cont_data):
-                        print("Generating {}/{} sentence".format(idx, len(cont_data)))
+                        if idx % 200 == 0:
+                            print("{}/{} finished".format(idx, len(cont_data)))
                         f.write(sampler.sample(sess, beg=sentence))
                         f.write("\n")
     f.close()

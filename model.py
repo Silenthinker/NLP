@@ -31,15 +31,6 @@ class Model():
             else:
                 return tf.contrib.rnn.BasicLSTMCell(
                         args.hidden_size, input_size=args.embedding_size, forget_bias=0.0, state_is_tuple=True)
-        '''        
-        def loop(prev, _):
-            """
-            If not training, predict next word based on previous predicted word
-            """
-            prev = tf.matmul(prev, softmax_w) + softmax_b
-            prev_symbol = tf.stop_gradient(tf.argmax(prev, 1)) # Stops gradient computation.
-            return tf.nn.embedding_lookup(self.embedding, prev_symbol)
-        '''
         
         def rnn(inputs_, initial_state, cell, loop_function=None, scope=None):
             """
@@ -79,7 +70,6 @@ class Model():
         inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
         
         # rnn
-#        outputs, last_state = rnn(inputs, self.initial_state, cell, loop_function=loop if not training else None, scope='softmax')
         outputs, last_state = rnn(inputs, self.initial_state, cell, scope='softmax')
         output = tf.reshape(tf.concat(outputs, 1), [-1, args.hidden_size]) # [batch_size*unrolled_steps, hidden_size]
         

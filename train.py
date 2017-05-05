@@ -35,9 +35,9 @@ def main():
     parser.add_argument('--learning_rate', type=float, default=0.001, help='learning rate')
     parser.add_argument('--decay_rate', type=float, default=0.97, help='decay rate for learning rate')
     parser.add_argument('--init_scale', type=float, default=0.1, help='initial scale for random uniform initializer')
-    parser.add_argument('--config', type=str, default='C', help='choose configuration of model')
+    parser.add_argument('--config', type=str, required=True, help='(string) choose configuration of model, values: A, B, C')
     # training
-    parser.add_argument('--pretrain', type=bool, default=True, help='pretrain word embedding')
+    parser.add_argument('--pretrain', type=bool, required=True, help='(bool) pretrain word embedding; True for pretrain; False otherwise')
     parser.add_argument('--batch_size', type=int, default=64, help='minibatch size')
     parser.add_argument('--num_epochs', type=int, default=3, help='number of epochs')
     parser.add_argument('--inter_threads', type=int, default=4, help='inter_op_parallelism_threads')
@@ -115,11 +115,11 @@ def train(args):
             sess.run(tf.assign(model.lr,
                                args.learning_rate * (args.decay_rate ** epoch_idx)))
             batches = reader.batch_iter(reader.train_data, args.batch_size)
-            state = sess.run(model.initial_state)
             train_loss_sum = 0.0
             b = 0
             for batch in batches:
                 start = time.time()
+                state = sess.run(model.initial_state)
                 x, y = batch
                 feed = {model.input_data: x, model.targets: y}
                 c, h = model.initial_state
