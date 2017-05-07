@@ -186,7 +186,7 @@ def train(args):
                                    global_step=epoch_idx * num_batches_per_epoch + b)
                         print("model saved to {}".format(checkpoint_path))
                     with open(os.path.join(args.save_dir, dev_perp_file), "a") as f: # Write samples to file            
-                        f.write("Epoch: {}, batch: {}/{}, avg perp: {}, min avg perp: {}".format(epoch_idx, 
+                        f.write("Epoch: {}, batch: {}/{}, avg perp: {:3f}, min avg perp: {:3f}\n".format(epoch_idx, 
                                 epoch_idx * num_batches_per_epoch + b,
                                 args.num_epochs * num_batches_per_epoch,
                                 avg_dev_perp,
