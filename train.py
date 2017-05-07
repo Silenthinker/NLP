@@ -11,12 +11,13 @@ from model import Model
 def configure(args):
     args.hidden_size = 512
     args.projector_size = args.hidden_size
-    args.learning_rate = 0.01
     config = args.config
     if config == "A":
         args.pretrain = False
+        args.learning_rate = 0.01
     elif config == "B":
         args.pretrain = True
+        args.learning_rate = 0.001
     else:
         args.hidden_size = 1024
         args.pretrain = True
@@ -169,7 +170,7 @@ def train(args):
                 if ((epoch_idx * num_batches_per_epoch+ b) % args.save_every == 0 
                     or (epoch_idx == args.num_epochs-1 
                     and b == num_batches_per_epoch-1)):
-                    dev_batches = reader.batch_iter(reader.test_data, shuffle=False)
+                    dev_batches = reader.batch_iter(reader.eval_data, shuffle=False)
                     sump = 0.0
                     count = 0.0
                     for dev_batch in dev_batches:
@@ -186,7 +187,7 @@ def train(args):
                                    global_step=epoch_idx * num_batches_per_epoch + b)
                         print("model saved to {}".format(checkpoint_path))
                     with open(os.path.join(args.save_dir, dev_perp_file), "a") as f: # Write samples to file            
-                        f.write("Epoch: {}, batch: {}/{}, avg perp: {:3f}, min avg perp: {:3f}\n".format(epoch_idx, 
+                        f.write("Epoch: {}, batch: {}/{}, avg perp: {:.3f}, min avg perp: {:.3f}\n".format(epoch_idx, 
                                 epoch_idx * num_batches_per_epoch + b,
                                 args.num_epochs * num_batches_per_epoch,
                                 avg_dev_perp,
