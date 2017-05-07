@@ -7,7 +7,6 @@ import numpy as np
 from gensim import models
 from data_utils import Reader
 from model import Model
-from tqdm import tqdm
 
 def configure(args):
     args.hidden_size = 512
