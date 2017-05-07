@@ -18,7 +18,8 @@ if __name__ == '__main__':
     with open(os.path.join(args.save_dir, 'config.pkl'), 'rb') as f:
         config = pickle.load(f)
     model = Model(config, training=False)
-
+    if not os.path.isdir(args.res_dir):
+        os.makedirs(args.res_dir)
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
     saver =  tf.train.Saver(tf.global_variables())
@@ -43,8 +44,10 @@ if __name__ == '__main__':
                     break;
                 feed = {model.input_data: np.array(x[i]).reshape((1, 1)), model.initial_state: state}
                 prob, state = sess.run([model.probs, model.final_state], feed)
-                sump += math.log(prob[0][x[i+1]])
-                count += 1
+                if x[i+1] != 2:
+                    sump += math.log(prob[0][x[i+1]])
+#                    print(prob[0][x[i+1]])
+                    count += 1
             perp = pow(2, -(sump/count))
             sumPerp += perp
             fout.write(str(round(perp, 3))+'\n')

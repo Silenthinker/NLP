@@ -32,23 +32,18 @@ class Model():
                 return tf.contrib.rnn.BasicLSTMCell(
                         args.hidden_size, input_size=args.embedding_size, forget_bias=0.0, state_is_tuple=True)
         
-        def rnn(inputs_, initial_state, cell, loop_function=None, scope=None):
+        def rnn(inputs_, initial_state, cell, scope=None):
             """
             RNN loop
             """
             with tf.variable_scope("rnn"):
                 state = initial_state
                 outputs = []
-                prev = None
                 for i, input_ in enumerate(inputs_):
-                    if loop_function is not None and prev is not None:
-                        input_ = loop_function(prev, i)
                     if i > 0:
                         tf.get_variable_scope().reuse_variables() # make sure reuse weight...
                     output, state = cell(input_, state)
                     outputs.append(output)
-                    if loop_function is not None:
-                        prev = output
             return outputs, state
 
         # input and target data
@@ -92,7 +87,7 @@ class Model():
             softmax_b = tf.get_variable("softmax_b", [args.vocab_size])
         self.logits = tf.matmul(down_proj_output, softmax_w) + softmax_b # [batch_size*unrolled_steps, vocab_size]
         self.predictions = tf.reshape(tf.argmax(self.logits, 1, name="predictions"), [-1, args.unrolled_steps])
-        self.probs = tf.nn.softmax(self.logits)
+        self.probs = tf.nn.softmax(self.logits) # [batch*unrolled_steps, vocab_size]
         loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.reshape(self.targets, [-1]),
                                                               logits=self.logits)
         # TODO: compute sentence-level perplexity without considering <pad>

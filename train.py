@@ -7,6 +7,7 @@ import numpy as np
 from gensim import models
 from data_utils import Reader
 from model import Model
+from tqdm import tqdm
 
 def configure(args):
     args.hidden_size = 512
@@ -23,6 +24,33 @@ def configure(args):
         args.projector_size = 512
         args.learning_rate = 0.001
     return args
+
+def calSingleBatchPerp(x, y, sess, model):
+    """
+    Compute average sentence-level perplexity per batch
+    Args:
+        x: [batch_size, unrolled_steps]
+        y: [batch_size, unrolled_steps]
+    """
+    batch_size, unrolled_steps = x.shape
+    sump = 0.0
+    state = sess.run(model.initial_state)
+    feed = {model.input_data: x, model.initial_state: state}
+    prob = sess.run([model.probs], feed) # list of size 1, element: [batch_size*unrolled_steps, vocab_size]
+    prob = prob[0].reshape((batch_size, unrolled_steps, -1)) # [batch_size, unrolled_steps, vocab_size]
+    for i in range(batch_size):
+        singlep = 0.0
+        count = 0
+        for j in range(unrolled_steps):
+            if y[i, j] == 1: # <eos>
+                break
+            if y[i, j] != 2: # not <pad>
+                singlep += np.log(prob[i, j, y[i, j]])
+                count += 1
+        singlep = np.power(2, -singlep/count)
+#        print(singlep)
+        sump += singlep
+    return sump/batch_size
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -86,8 +114,9 @@ def train(args):
         args: parsed arguments
     """
     args.max_sentence_length = args.unrolled_steps+1
-    sample_file = "sample_"+time.strftime("%Y-%m-%d-%H-%M-%S")+".txt"
+    dev_perp_file = "dev_perp_"+time.strftime("%Y-%m-%d-%H-%M-%S")+".txt"
     reader = Reader(args.data_dir, max_vocabSize=args.vocab_size, max_sentence_length=args.max_sentence_length)
+    num_batches_per_epoch = int(len(reader.train_data)/args.batch_size)
     if not os.path.isdir(args.save_dir):
         os.makedirs(args.save_dir)
     with open(os.path.join(args.save_dir, 'config.pkl'), 'wb') as f:
@@ -101,6 +130,7 @@ def train(args):
                                   allow_soft_placement=True,
                                   log_device_placement=True)
     sess = tf.Session(config=session_conf)
+    min_avg_dev_perp = np.inf
     with sess.as_default() as sess:
         # instrument for tensorboard
         summaries = tf.summary.merge_all()
@@ -109,7 +139,7 @@ def train(args):
         sess.run(tf.global_variables_initializer())
         if args.pretrain:
             load_embedding(sess, args.data_dir, args.vocab_size, args.embedding_size, reader.word_toId, model.embedding)
-        saver = tf.train.Saver(tf.global_variables())
+        saver = tf.train.Saver(tf.global_variables(), max_to_keep=1)
         for epoch_idx in range(args.num_epochs):
             # TODO: better management of learning rate
             sess.run(tf.assign(model.lr,
@@ -129,29 +159,39 @@ def train(args):
                 # instrument for tensorboard
                 summ, train_loss, state, _, predictions = sess.run([summaries, model.cost, model.final_state, model.train_op, model.predictions], feed)
                 train_loss_sum += train_loss
-                writer.add_summary(summ, epoch_idx * reader.num_batches_per_epoch + b)
+                writer.add_summary(summ, epoch_idx * num_batches_per_epoch + b)
                 end = time.time()
                 print("{}/{} (epoch {}), average loss = {:.3f}, time/batch = {:.3f}"
-                      .format(epoch_idx * reader.num_batches_per_epoch + b,
-                              args.num_epochs * reader.num_batches_per_epoch,
+                      .format(epoch_idx * num_batches_per_epoch + b,
+                              args.num_epochs * num_batches_per_epoch,
                               epoch_idx,
                               train_loss_sum/(b+1),
                               end - start))
-                if ((epoch_idx * reader.num_batches_per_epoch+ b) % args.save_every == 0 
+                if ((epoch_idx * num_batches_per_epoch+ b) % args.save_every == 0 
                     or (epoch_idx == args.num_epochs-1 
-                    and b == reader.num_batches_per_epoch-1)):
-                    # save for the last result
-                    checkpoint_path = os.path.join(args.save_dir, 'model.ckpt')
-                    saver.save(sess, checkpoint_path,
-                               global_step=epoch_idx * reader.num_batches_per_epoch + b)
-                    print("model saved to {}".format(checkpoint_path))
-                    with open(os.path.join(args.save_dir, sample_file), "a") as f: # Write samples to file            
-                        f.write("Epoch: {}, batch: {}/{}".format(epoch_idx, 
-                                epoch_idx * reader.num_batches_per_epoch + b,
-                                args.num_epochs * reader.num_batches_per_epoch))
-                        f.write("\n")
-                        f.write(" ".join(reader.id_to_word(predictions)))
-                        f.write("\n")
+                    and b == num_batches_per_epoch-1)):
+                    dev_batches = reader.batch_iter(reader.test_data, shuffle=False)
+                    sump = 0.0
+                    count = 0.0
+                    for dev_batch in dev_batches:
+                        dev_x_batch, dev_y_batch = dev_batch
+                        sump += calSingleBatchPerp(dev_x_batch, dev_y_batch, sess, model)
+                        count += 1
+                    avg_dev_perp = sump / count
+                    print(avg_dev_perp)
+                    if avg_dev_perp < min_avg_dev_perp:
+                        min_avg_dev_perp = avg_dev_perp
+                        # save for the last result
+                        checkpoint_path = os.path.join(args.save_dir, 'model.ckpt')
+                        saver.save(sess, checkpoint_path,
+                                   global_step=epoch_idx * num_batches_per_epoch + b)
+                        print("model saved to {}".format(checkpoint_path))
+                    with open(os.path.join(args.save_dir, dev_perp_file), "a") as f: # Write samples to file            
+                        f.write("Epoch: {}, batch: {}/{}, avg perp: {}, min avg perp: {}".format(epoch_idx, 
+                                epoch_idx * num_batches_per_epoch + b,
+                                args.num_epochs * num_batches_per_epoch,
+                                avg_dev_perp,
+                                min_avg_dev_perp))
                 b += 1
 if __name__ == '__main__':
     main()
